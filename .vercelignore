@@ -1,0 +1,9 @@
+.github
+supabase
+*.md
+!README.md
+.env.local
+.env.*.local
+node_modules
+.next
+.turbo

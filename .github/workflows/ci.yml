@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Typecheck + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build
+        env:
+          # Placeholder envs so Next.js build doesn't fail on missing vars.
+          # Real envs come from Vercel at runtime.
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
+          SUPABASE_SERVICE_ROLE_KEY: "placeholder"
+          RAPIDAPI_KEY: "placeholder"
+        run: npx next build

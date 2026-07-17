@@ -1,0 +1,65 @@
+name: Vercel Preview
+
+on:
+  pull_request:
+    branches: [main]
+
+# NOTE: Requires these repo secrets:
+#   VERCEL_TOKEN         — https://vercel.com/account/tokens
+#   VERCEL_ORG_ID        — from `vercel link` .vercel/project.json
+#   VERCEL_PROJECT_ID    — from `vercel link` .vercel/project.json
+#
+# Without them, this workflow is a no-op (it will fail on the pull step, which
+# is fine — you can delete the file if you don't want previews via Actions and
+# just rely on Vercel's native GitHub integration).
+
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for Vercel token
+        id: check
+        run: |
+          if [ -n "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::VERCEL_TOKEN not set — skipping preview deploy. Add it under Settings → Secrets."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.has_token == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.has_token == 'true'
+        with:
+          node-version: "20"
+      - name: Install Vercel CLI
+        if: steps.check.outputs.has_token == 'true'
+        run: npm i -g vercel@latest
+      - name: Pull Vercel env (preview)
+        if: steps.check.outputs.has_token == 'true'
+        run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Build
+        if: steps.check.outputs.has_token == 'true'
+        run: vercel build --token=${{ secrets.VERCEL_TOKEN }}
+      - name: Deploy preview
+        id: deploy
+        if: steps.check.outputs.has_token == 'true'
+        run: |
+          URL=$(vercel deploy --prebuilt --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+      - name: Comment preview URL
+        if: steps.check.outputs.has_token == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = "${{ steps.deploy.outputs.url }}";
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `🏀 Preview deployed: ${url}`,
+            });
