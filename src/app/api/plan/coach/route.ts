@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer, resolveAthlete } from "@/lib/supabase/server";
 import { aiWorkout, toGoal } from "@/lib/rapidapi/aiWorkout";
 
 export const runtime = "nodejs";
@@ -17,14 +17,11 @@ export const runtime = "nodejs";
  */
 export async function POST(req: NextRequest) {
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
+  const { athlete, error: authErr } = await resolveAthlete(sb);
+  if (authErr === "unauthorized") return NextResponse.json({ error: authErr }, { status: 401 });
+  if (!athlete) return NextResponse.json({ error: authErr ?? "no athlete profile" }, { status: 400 });
   const body = await req.json().catch(() => ({}));
   const useCustom: boolean = body.use_custom !== false;
-
-  const { data: athlete } = await sb.from("athletes").select("*").eq("user_id", user.id).single();
-  if (!athlete) return NextResponse.json({ error: "no athlete profile" }, { status: 400 });
 
   // Anchor to today's deterministic plan so the LLM programming matches the dose.
   const today = new Date().toISOString().slice(0, 10);

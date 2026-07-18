@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer, resolveAthlete } from "@/lib/supabase/server";
 import { z } from "zod";
 
 export const runtime = "nodejs";
@@ -18,14 +18,11 @@ const Schema = z.object({
 
 export async function POST(req: NextRequest) {
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
+  const { athlete, error: authErr } = await resolveAthlete(sb);
+  if (authErr === "unauthorized") return NextResponse.json({ error: authErr }, { status: 401 });
+  if (!athlete) return NextResponse.json({ error: authErr ?? "no athlete profile" }, { status: 400 });
   const parsed = Schema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-
-  const { data: athlete } = await sb.from("athletes").select("id").eq("user_id", user.id).single();
-  if (!athlete) return NextResponse.json({ error: "no athlete profile" }, { status: 400 });
 
   const { data, error } = await sb
     .from("recovery_logs")

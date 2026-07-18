@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer, resolveAthlete } from "@/lib/supabase/server";
 import { buildDailyPlan, type AthleteCtx } from "@/lib/agent/planner";
 import { differenceInHours } from "date-fns";
 
@@ -7,14 +7,11 @@ export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
+  const { athlete, error: authErr } = await resolveAthlete(sb);
+  if (authErr === "unauthorized") return NextResponse.json({ error: authErr }, { status: 401 });
+  if (!athlete) return NextResponse.json({ error: authErr ?? "no athlete profile" }, { status: 400 });
   const body = await req.json().catch(() => ({}));
   const planDate = body.plan_date ? new Date(body.plan_date) : new Date();
-
-  const { data: athlete, error: aErr } = await sb.from("athletes").select("*").eq("user_id", user.id).single();
-  if (aErr || !athlete) return NextResponse.json({ error: "no athlete profile" }, { status: 400 });
 
   const dateISO = planDate.toISOString().slice(0, 10);
 
@@ -85,12 +82,10 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
-  const date = req.nextUrl.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
-  const { data: athlete } = await sb.from("athletes").select("id").eq("user_id", user.id).single();
+  const { athlete, error: authErr } = await resolveAthlete(sb);
+  if (authErr === "unauthorized") return NextResponse.json({ error: authErr }, { status: 401 });
   if (!athlete) return NextResponse.json({ plan: null });
+  const date = req.nextUrl.searchParams.get("date") ?? new Date().toISOString().slice(0, 10);
 
   const { data: plan } = await sb
     .from("daily_plans")

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function Onboarding() {
   const [form, setForm] = useState({
@@ -18,38 +17,35 @@ export default function Onboarding() {
     equipment: ["barbell","dumbbell","body weight","resistance band"],
   });
   const [msg, setMsg] = useState<string | null>(null);
-  const sb = supabaseBrowser();
+  const [showCoords, setShowCoords] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await sb.auth.getUser();
-      if (!user) return;
-      const { data } = await sb.from("athletes").select("*").eq("user_id", user.id).maybeSingle();
-      if (data) setForm((f) => ({ ...f, ...data, lat: data.lat ?? "", lon: data.lon ?? "" }));
+      const r = await fetch("/api/athlete");
+      const j = await r.json();
+      if (j.athlete) {
+        setForm((f) => ({
+          ...f,
+          ...j.athlete,
+          lat: j.athlete.lat ?? "",
+          lon: j.athlete.lon ?? "",
+          equipment: j.athlete.equipment ?? f.equipment,
+        }));
+      }
     })();
-  }, [sb]);
+  }, []);
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     setMsg("Saving…");
-    const { data: { user } } = await sb.auth.getUser();
-    if (!user) { setMsg("Not signed in — check the README for the demo sign-in trick."); return; }
-    const payload = {
-      user_id: user.id,
-      display_name: form.display_name,
-      position: form.position,
-      height_cm: Number(form.height_cm),
-      weight_kg: Number(form.weight_kg),
-      training_age_years: Number(form.training_age_years),
-      city: form.city,
-      country: form.country,
-      lat: form.lat === "" ? null : Number(form.lat),
-      lon: form.lon === "" ? null : Number(form.lon),
-      season_phase: form.season_phase,
-      equipment: form.equipment,
-    };
-    const { error } = await sb.from("athletes").upsert(payload, { onConflict: "user_id" });
-    setMsg(error ? `Error: ${error.message}` : "Saved. Head to Recovery log next.");
+    const r = await fetch("/api/athlete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    const j = await r.json();
+    if (!r.ok) { setMsg(`Error: ${j.error ?? "save failed"}`); return; }
+    setMsg("Saved. Head to your dashboard.");
   };
 
   return (
@@ -81,21 +77,40 @@ export default function Onboarding() {
         <div className="grid grid-cols-2 gap-3">
           <Field label="City">
             <input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })}
+              placeholder="Ocoee"
               className="w-full rounded-md bg-court-bg border border-court-border px-3 py-2" />
           </Field>
           <Field label="Country">
             <input value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })}
               className="w-full rounded-md bg-court-bg border border-court-border px-3 py-2" />
           </Field>
-          <Field label="Lat">
-            <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })}
-              className="w-full rounded-md bg-court-bg border border-court-border px-3 py-2" />
-          </Field>
-          <Field label="Lon">
-            <input value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })}
-              className="w-full rounded-md bg-court-bg border border-court-border px-3 py-2" />
-          </Field>
         </div>
+
+        {/* Optional coords — hidden by default so onboarding doesn't feel gnarly */}
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={() => setShowCoords((s) => !s)}
+            className="text-xs text-court-muted hover:text-court-text"
+          >
+            {showCoords ? "Hide" : "+ Add"} home coordinates (optional — enables air-quality-aware plans)
+          </button>
+          {showCoords && (
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <Field label="Latitude (e.g. 28.5695)">
+                <input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })}
+                  placeholder="28.5695"
+                  className="w-full rounded-md bg-court-bg border border-court-border px-3 py-2" />
+              </Field>
+              <Field label="Longitude (e.g. -81.5460)">
+                <input value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value })}
+                  placeholder="-81.5460"
+                  className="w-full rounded-md bg-court-bg border border-court-border px-3 py-2" />
+              </Field>
+            </div>
+          )}
+        </div>
+
         <button type="submit" className="rounded-lg px-4 py-2 bg-court-accent text-black font-semibold">Save profile</button>
         {msg && <div className="text-sm text-court-muted">{msg}</div>}
       </form>

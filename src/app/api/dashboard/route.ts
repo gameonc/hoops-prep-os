@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer, resolveAthlete } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -9,11 +9,9 @@ export const runtime = "nodejs";
  */
 export async function GET() {
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
-  const { data: athlete } = await sb.from("athletes").select("*").eq("user_id", user.id).single();
-  if (!athlete) return NextResponse.json({ error: "no athlete profile" }, { status: 400 });
+  const { athlete, error: authErr } = await resolveAthlete(sb);
+  if (authErr === "unauthorized") return NextResponse.json({ error: authErr }, { status: 401 });
+  if (!athlete) return NextResponse.json({ error: authErr ?? "no athlete profile" }, { status: 400 });
 
   const today = new Date();
   const todayISO = today.toISOString().slice(0, 10);

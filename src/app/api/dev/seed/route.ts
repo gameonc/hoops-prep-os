@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseServer, resolveAthlete } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -18,12 +18,9 @@ export async function POST(_req: NextRequest) {
   }
 
   const sb = await supabaseServer();
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-
-  const { data: athlete } = await sb.from("athletes")
-    .select("id,display_name,position").eq("user_id", user.id).single();
-  if (!athlete) return NextResponse.json({ error: "no athlete profile — finish onboarding first" }, { status: 400 });
+  const { athlete, error: authErr } = await resolveAthlete(sb);
+  if (authErr === "unauthorized") return NextResponse.json({ error: authErr }, { status: 401 });
+  if (!athlete) return NextResponse.json({ error: authErr ?? "no athlete profile" }, { status: 400 });
 
   // Realistic patterns: sleep varies 6.5–8.5, RHR 50–58, HRV 60–95,
   // VO2 hovers around 50, workouts alternate sport/strength/rest.
